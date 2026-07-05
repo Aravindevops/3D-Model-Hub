@@ -129,7 +129,7 @@ export default function ModelCard({ model }: { model: Model }) {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
-              <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.125rem', fontWeight: 600 }}>{model.title}</h3>
+              <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.125rem', fontWeight: 600 }}>{title}</h3>
               <div style={{ display: 'flex', gap: '0.25rem' }}>
                 <button onClick={() => setIsEditing(true)} disabled={isDeleting} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: '0.25rem' }} aria-label="Edit model">
                   <Edit2 size={16} />
@@ -140,7 +140,7 @@ export default function ModelCard({ model }: { model: Model }) {
               </div>
             </div>
             <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', flexGrow: 1 }}>
-              {model.description || 'No description provided.'}
+              {description || 'No description provided.'}
             </p>
           </div>
         )}
