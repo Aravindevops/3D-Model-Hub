@@ -1,0 +1,101 @@
+Explanation of schema.sql line-by-line:
+
+---
+
+Part 1: Creating the Table (Lines 1-8)
+--------------------------------------
+1: -- Create the 'models' table
+2: create table public.models (
+3:   id uuid default gen_random_uuid() primary key,
+4:   title text not null,
+5:   description text,
+6:   glb_url text not null,
+7:   created_at timestamp with time zone default timezone('utc'::text, now()) not null
+8: );
+
+* Line 1: A comment explaining that this block creates the 'models' table.
+* Line 2: Starts the creation of a table named 'models' inside the 'public' schema.
+* Line 3: Defines the primary key column 'id' using the 'uuid' data type. It defaults to generating a unique UUID using 'gen_random_uuid()' whenever a new row is created.
+* Line 4: Defines a 'title' column of type 'text' that cannot be empty (not null).
+* Line 5: Defines a 'description' column of type 'text' which is optional (can be null).
+* Line 6: Defines a 'glb_url' column of type 'text' to store the URL of the uploaded 3D GLB file. This is required (not null).
+* Line 7: Defines a 'created_at' column storing a timestamp with timezone. It defaults to the current UTC time when a record is inserted and cannot be null.
+* Line 8: Closes the table definition.
+
+
+Part 2: Enabling Row Level Security (Lines 10-11)
+-------------------------------------------------
+10: -- Enable Row Level Security (RLS)
+11: alter table public.models enable row level security;
+
+* Line 11: Enables Row Level Security (RLS) on the 'models' table. By default, once RLS is enabled, all select/insert/update/delete operations are denied to public users unless explicit policies permit them.
+
+
+Part 3: Public Read Policy (Lines 13-18)
+----------------------------------------
+13: -- Create policy to allow public read access
+14: create policy "Allow public read access"
+15:   on public.models
+16:   for select
+17:   to public
+18:   using (true);
+
+* Line 14: Declares a new security policy named "Allow public read access".
+* Line 15-16: Applies this policy specifically to 'select' operations (queries) on the 'public.models' table.
+* Line 17: Targets the 'public' role (anonymous / unauthenticated users).
+* Line 18: 'using (true)' means the policy always evaluates to true, letting anyone read any row from this table.
+
+
+Part 4: Public Insert Policy (Lines 20-28)
+------------------------------------------
+20: -- Create policy to allow authenticated users to insert (if you want to restrict uploads later)
+21: -- For now, to allow the admin dashboard to work without auth:
+22: create policy "Allow public inserts (for demo purposes)"
+23:   on public.models
+24:   for insert
+25:   to public
+26:   with check (true);
+27:   
+28: -- Note: In a production app, you should set up Supabase Auth and restrict the insert policy.
+
+* Line 22: Declares a policy named "Allow public inserts (for demo purposes)".
+* Line 23-24: Applies this policy to 'insert' operations on 'public.models'.
+* Line 25: Targets the 'public' role.
+* Line 26: 'with check (true)' allows any insert payload to succeed without checks.
+* Line 28: A comment reminding you that this open upload setting is insecure for production and should eventually be locked down with user authentication.
+
+
+Part 5: Creating the Storage Bucket (Lines 30-31)
+-------------------------------------------------
+30: -- Create a storage bucket named 'models'
+31: insert into storage.buckets (id, name, public) values ('models', 'models', true);
+
+* Line 31: Inserts a configuration row into Supabase's internal storage table. This initializes a public file storage bucket named 'models' to store the physical .glb file uploads.
+
+
+Part 6: Storage Read Policy (Lines 33-38)
+-----------------------------------------
+33: -- Allow public read access to the 'models' bucket
+34: create policy "Public read access to models bucket"
+35:   on storage.objects
+36:   for select
+37:   to public
+38:   using (bucket_id = 'models');
+
+* Line 34-36: Creates a policy on the 'storage.objects' table (which tracks files in buckets) specifically for read ('select') operations.
+* Line 37: Applies to any 'public' request.
+* Line 38: 'using (bucket_id = 'models')' allows public users to read files only if they reside in the 'models' bucket.
+
+
+Part 7: Storage Upload Policy (Lines 40-45)
+-------------------------------------------
+40: -- Allow public uploads to the 'models' bucket
+41: create policy "Public upload access to models bucket"
+42:   on storage.objects
+43:   for insert
+44:   to public
+45:   with check (bucket_id = 'models');
+
+* Line 41-43: Creates a policy for writing ('insert') records in 'storage.objects' (i.e., uploading new files).
+* Line 44: Applies to the 'public' role.
+* Line 45: 'with check (bucket_id = 'models')' ensures public uploads are restricted exclusively to the 'models' bucket and cannot write to other storage folders.

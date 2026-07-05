@@ -1,0 +1,246 @@
+# DIY Guide: Building the 3D Asset Management System
+
+This guide will walk you through building the 3D Digital Asset Manager from scratch. By following these steps, you will learn how to initialize a Next.js project, set up 3D rendering with React Three Fiber, and integrate Supabase for backend storage and database.
+
+---
+
+## Required Knowledge & Skill Level
+
+To comfortably build this project yourself, you should generally be at an **Intermediate** level in frontend web development. Here is the breakdown of what you should know:
+
+1. **HTML/CSS (Intermediate)**: You need to know how to style elements, use CSS Grid/Flexbox, and understand responsive design.
+2. **JavaScript/TypeScript (Intermediate)**: Understanding ES6+ features (arrow functions, destructuring, async/await) is crucial. TypeScript adds types (like `useState<File | null>`) which requires basic TS knowledge.
+3. **React (Intermediate)**: You must understand React hooks (`useState`, `useEffect`), props, component lifecycle, and event handling.
+4. **Next.js (Beginner to Intermediate)**: You need to understand the difference between Server Components (the default in Next.js App Router, used for fetching data securely) and Client Components (marked with `"use client"`, used for interactivity like clicking buttons or rendering 3D canvas).
+5. **Three.js / React Three Fiber (Beginner)**: You don't need complex 3D math knowledge, but you should understand the concept of a `Canvas`, a `Camera`, lighting, and how 3D models (meshes/scenes) are placed in a 3D space.
+6. **Databases / Supabase (Beginner)**: Basic understanding of what a relational database (PostgreSQL) is, how tables store rows of data, and how cloud storage buckets hold files (like Google Drive).
+
+---
+
+## Prerequisites
+Before you start, make sure you have installed:
+1. Node.js (v18 or higher) - The runtime for JavaScript outside the browser.
+2. Git - For version control.
+3. A code editor like VS Code.
+4. A free Supabase account (at supabase.com).
+
+---
+
+## Step 1: Initialize the Next.js Project
+
+Open your terminal or command prompt in your desired folder and run the following command to scaffold a new Next.js application. Next.js is a framework built on top of React that handles routing, server-side rendering, and tooling automatically.
+
+```bash
+npx create-next-app@latest 3d-asset-manager --typescript --eslint --no-tailwind --app --src-dir --import-alias "@/*"
+```
+
+**Deep Dive Explanation:**
+- `npx create-next-app`: This is a tool provided by Vercel that generates all the boilerplate files needed for a Next.js app so you don't have to configure Webpack or Babel yourself.
+- `--app`: This tells Next.js to use the new "App Router" architecture. In the App Router, folders define your website's URLs. For example, a folder named `admin` with a `page.tsx` file inside becomes the `/admin` route.
+- `--src-dir`: This keeps your source code clean by putting it all inside a `src/` folder rather than cluttering the root folder.
+
+Navigate into your new project:
+```bash
+cd 3d-asset-manager
+```
+
+---
+
+## Step 2: Install Project Dependencies
+
+Run this command to install third-party libraries:
+
+```bash
+npm install three @types/three @react-three/fiber @react-three/drei @supabase/supabase-js lucide-react
+```
+
+**Deep Dive Explanation:**
+- `three`: The core engine that draws 3D graphics on a web `<canvas>` using WebGL.
+- `@react-three/fiber`: Writing raw Three.js is complex. This library lets you write Three.js using familiar React components (e.g., writing `<mesh>` instead of `new THREE.Mesh()`).
+- `@react-three/drei`: "Drei" means three in German. It is a library of pre-made helpers for React Three Fiber. Instead of manually coding lights and camera controls, we can just drop in `<Stage>` and `<OrbitControls>`.
+- `@supabase/supabase-js`: The SDK that allows our frontend code to talk securely to our Supabase database over the internet.
+
+---
+
+## Step 3: Set Up Supabase (Database & Storage)
+
+Supabase gives us a backend without having to write backend server code.
+
+1. Go to https://supabase.com/dashboard and create a new project.
+2. Go to the "SQL Editor" on the left menu.
+3. Paste and run the following SQL code. 
+
+```sql
+-- Create the 'models' table to hold text data (metadata)
+create table public.models (
+  id uuid default gen_random_uuid() primary key,
+  title text not null,
+  description text,
+  glb_url text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Enable Row Level Security (RLS) to protect the database
+alter table public.models enable row level security;
+create policy "Allow public read access" on public.models for select to public using (true);
+create policy "Allow public inserts" on public.models for insert to public with check (true);
+  
+-- Create a storage bucket named 'models' to hold the actual .glb binary files
+insert into storage.buckets (id, name, public) values ('models', 'models', true);
+
+-- Allow public read/write access to the bucket
+create policy "Public read access to models bucket" on storage.objects for select to public using (bucket_id = 'models');
+create policy "Public upload access to models bucket" on storage.objects for insert to public with check (bucket_id = 'models');
+```
+
+**Deep Dive Explanation:**
+In a 3D asset manager, you deal with two types of data:
+1. **Binary Data (The GLB file)**: These are large files. Databases are bad at storing large files. Therefore, we create a **Storage Bucket** (like a folder in the cloud) to hold the physical `.glb` files.
+2. **Relational Data (The Metadata)**: We need to store the title of the model, when it was uploaded, and crucially, the **URL** pointing to where the physical file lives in the storage bucket. We store this in the PostgreSQL database table.
+
+4. Go to **Project Settings -> API**.
+5. Create `.env.local` in your project root:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=your_project_url_here
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_public_key_here
+```
+*(The `NEXT_PUBLIC_` prefix tells Next.js it is safe to bundle these keys into the browser's JavaScript).*
+
+---
+
+## Step 4: Writing the Code
+
+### 4.1. Initialize the Supabase Client (`src/lib/supabase.ts`)
+```typescript
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+```
+**Explanation**: This creates a singleton instance of the Supabase client that we can import anywhere in our app to fetch or insert data.
+
+### 4.2. Build the 3D Model Viewer Component (`src/components/ModelViewer.tsx`)
+```tsx
+"use client";
+import React, { Suspense } from 'react';
+import { Canvas } from '@react-three/fiber';
+import { OrbitControls, Stage, useGLTF } from '@react-three/drei';
+
+function Model({ url }: { url: string }) {
+  const { scene } = useGLTF(url);
+  return <primitive object={scene} />;
+}
+
+export default function ModelViewer({ url }: { url: string }) {
+  if (!url) return <div>No model</div>;
+
+  return (
+    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+      <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 150], fov: 50 }}>
+        <Suspense fallback={null}>
+          <Stage preset="rembrandt" intensity={1} environment="city">
+            <Model url={url} />
+          </Stage>
+        </Suspense>
+        <OrbitControls autoRotate autoRotateSpeed={1} makeDefault />
+      </Canvas>
+    </div>
+  );
+}
+```
+**Deep Dive Explanation**: 
+- `"use client"`: Next.js renders code on the server by default. However, 3D canvases require browser APIs (WebGL). By adding `"use client"`, we force Next.js to render this component in the user's browser.
+- `useGLTF`: This hook downloads the 3D model from the provided URL, parses the geometry and textures, and returns a `scene` object.
+- `<primitive object={scene} />`: This injects the raw Three.js scene into the React tree.
+- `<Suspense>`: 3D models take time to download over the network. Suspense pauses the rendering of the model until it is fully downloaded, preventing errors.
+
+### 4.3. Build the Admin Upload Page (`src/app/admin/page.tsx`)
+```tsx
+"use client";
+import { useState } from 'react';
+import { supabase } from '@/lib/supabase';
+
+export default function AdminPage() {
+  const [file, setFile] = useState<File | null>(null);
+  const [title, setTitle] = useState('');
+
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!file || !title) return;
+
+    // 1. Upload to Storage Bucket
+    const fileName = `${Date.now()}_${file.name}`;
+    await supabase.storage.from('models').upload(fileName, file);
+
+    // 2. Get the public URL
+    const { data: { publicUrl } } = supabase.storage.from('models').getPublicUrl(fileName);
+
+    // 3. Save to Database
+    await supabase.from('models').insert([{ title, glb_url: publicUrl }]);
+    
+    alert('Uploaded successfully!');
+  };
+
+  return (
+    <form onSubmit={handleUpload}>
+      <h1>Upload 3D Model</h1>
+      <input type="text" placeholder="Title" onChange={e => setTitle(e.target.value)} required />
+      <input type="file" accept=".glb" onChange={e => setFile(e.target.files?.[0] || null)} required />
+      <button type="submit">Upload</button>
+    </form>
+  );
+}
+```
+**Deep Dive Explanation**:
+This is a Client Component because it uses state (`useState`) to track what the user types and selects. 
+The upload process happens in three distinct steps:
+1. We send the physical `.glb` file to the `models` storage bucket. We prepend `Date.now()` to the filename to ensure we never overwrite an existing file with the same name.
+2. We ask Supabase for the permanent web address (URL) of the file we just uploaded.
+3. We take that URL, along with the text title, and insert them as a new row in the `models` PostgreSQL table.
+
+### 4.4. Build the Public Gallery Page (`src/app/page.tsx`)
+```tsx
+import { supabase } from '@/lib/supabase';
+import ModelViewer from '@/components/ModelViewer';
+
+export const revalidate = 0;
+
+export default async function Home() {
+  const { data: models } = await supabase
+    .from('models')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  return (
+    <main style={{ padding: '2rem' }}>
+      <h1>3D Gallery</h1>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '2rem' }}>
+        {models?.map((model) => (
+          <div key={model.id} style={{ border: '1px solid #ccc', borderRadius: '8px', overflow: 'hidden' }}>
+            <div style={{ height: '300px', backgroundColor: '#f0f0f0' }}>
+              <ModelViewer url={model.glb_url} />
+            </div>
+            <div style={{ padding: '1rem' }}>
+              <h3>{model.title}</h3>
+            </div>
+          </div>
+        ))}
+      </div>
+    </main>
+  );
+}
+```
+**Deep Dive Explanation**:
+Notice there is **no** `"use client"` here. This is a Server Component. 
+When a user visits your website, the Next.js server securely talks to Supabase (`await supabase.from('models').select('*')`), gets all the data, constructs the HTML structure, and sends the finished HTML to the browser. This is extremely fast and great for SEO. It maps through the array of data and passes the `glb_url` into the client-side `<ModelViewer>` component to render the 3D graphics.
+
+---
+
+## Step 5: Run the Project
+Open your terminal and run:
+```bash
+npm run dev
+```
