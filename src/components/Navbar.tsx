@@ -41,7 +41,7 @@ export default function Navbar() {
             </li>
             <li>
               <Link href="/admin" className="btn btn-secondary" style={{ padding: '0.4rem 1rem' }}>
-                <Upload size={16} /> Admin Upload
+                <Upload size={16} /> Upload file
               </Link>
             </li>
           </ul>

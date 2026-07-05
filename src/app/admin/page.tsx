@@ -79,7 +79,7 @@ export default function AdminPage() {
   return (
     <main className="main-content">
       <div className="container" style={{ maxWidth: '600px' }}>
-        <h1 className="animate-fade-in">Admin Dashboard</h1>
+        <h1 className="animate-fade-in">Dashboard</h1>
         <p className="animate-fade-in delay-100" style={{ marginBottom: '2rem' }}>
           Upload new 3D models to your digital asset management system.
         </p>
