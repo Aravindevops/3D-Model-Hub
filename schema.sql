@@ -25,7 +25,22 @@ create policy "Allow public inserts (for demo purposes)"
   to public
   with check (true);
   
--- Note: In a production app, you should set up Supabase Auth and restrict the insert policy.
+-- Create policy to allow public updates to edit title/description
+create policy "Allow public updates (for demo purposes)"
+  on public.models
+  for update
+  to public
+  using (true)
+  with check (true);
+  
+-- Create policy to allow public deletes
+create policy "Allow public deletes (for demo purposes)"
+  on public.models
+  for delete
+  to public
+  using (true);
+  
+-- Note: In a production app, you should set up Supabase Auth and restrict the insert/update/delete policies.
 
 -- Create a storage bucket named 'models'
 insert into storage.buckets (id, name, public) values ('models', 'models', true);
@@ -43,3 +58,10 @@ create policy "Public upload access to models bucket"
   for insert
   to public
   with check (bucket_id = 'models');
+
+-- Allow public deletes from the 'models' bucket
+create policy "Public delete access to models bucket"
+  on storage.objects
+  for delete
+  to public
+  using (bucket_id = 'models');

@@ -13,7 +13,7 @@ function Model({ url }: ModelProps) {
   return <primitive object={scene} />;
 }
 
-export default function ModelViewer({ url }: { url: string }) {
+export default function ModelViewer({ url, interactive = true }: { url: string, interactive?: boolean }) {
   if (!url) {
     return (
       <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)' }}>
@@ -23,20 +23,22 @@ export default function ModelViewer({ url }: { url: string }) {
   }
 
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative', borderRadius: 'var(--radius-md)', overflow: 'hidden', backgroundColor: 'var(--bg-secondary)' }}>
+    <div style={{ width: '100%', height: '100%', position: 'relative', borderRadius: 'var(--radius-md)', overflow: 'hidden', backgroundColor: 'var(--bg-secondary)', pointerEvents: interactive ? 'auto' : 'none' }}>
       <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 150], fov: 50 }}>
         <Suspense fallback={null}>
           <Stage preset="rembrandt" intensity={1} environment="city">
             <Model url={url} />
           </Stage>
         </Suspense>
-        <OrbitControls autoRotate autoRotateSpeed={1} makeDefault />
+        {interactive && <OrbitControls autoRotate autoRotateSpeed={1} makeDefault />}
       </Canvas>
 
-      {/* Overlay loading state could be added here */}
-      <div style={{ position: 'absolute', bottom: '10px', right: '10px', fontSize: '0.75rem', color: 'var(--text-tertiary)', pointerEvents: 'none' }}>
-        Interactive 3D Viewer
-      </div>
+      {/* Overlay text */}
+      {interactive && (
+        <div style={{ position: 'absolute', bottom: '10px', right: '10px', fontSize: '0.75rem', color: 'var(--text-tertiary)', pointerEvents: 'none' }}>
+          Interactive 3D Viewer
+        </div>
+      )}
     </div>
   );
 }

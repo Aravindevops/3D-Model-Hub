@@ -202,3 +202,14 @@ p { margin-bottom: 1rem; color: var(--text-secondary); }
 
 .delay-100 { animation-delay: 0.1s; }
 .delay-200 { animation-delay: 0.2s; }
+
+.hover-overlay:hover {
+  opacity: 1 !important;
+}
+
+.hover-text {
+  transition: color 0.2s;
+}
+.hover-text:hover {
+  color: var(--text-primary) !important;
+}
